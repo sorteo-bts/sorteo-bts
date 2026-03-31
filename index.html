@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sorteo BTS Lima 2025 — Verificación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <style>
+    :root {
+      --purple-deep:   #0d0010;
+      --purple-mid:    #1a0030;
+      --purple-bright: #7b2fff;
+      --purple-glow:   #a855f7;
+      --pink:          #e040fb;
+      --gold:          #ffd700;
+      --white:         #f5f0ff;
+      --gray:          #9d8faa;
+      --success:       #00e5a0;
+      --error:         #ff4d6d;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--purple-deep);
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ── STARS ── */
+    #stars-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── NOISE OVERLAY ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.4;
+    }
+
+    /* ── GRADIENT MESH ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 10%, rgba(123,47,255,0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(224,64,251,0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 50% 50%, rgba(26,0,48,0.6) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── LAYOUT ── */
+    .page {
+      position: relative;
+      z-index: 2;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 0;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    .crown {
+      font-size: 2.2rem;
+      display: block;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 0 12px var(--gold));
+      animation: floatCrown 3s ease-in-out infinite;
+    }
+
+    @keyframes floatCrown {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-8px); }
+    }
+
+    .logo-text {
+      font-family: 'Playfair Display', serif;
+      font-weight: 900;
+      font-size: clamp(3rem, 10vw, 6rem);
+      letter-spacing: -2px;
+      line-height: 1;
+      background: linear-gradient(135deg, #ffffff 0%, var(--purple-glow) 40%, var(--pink) 80%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(168,85,247,0.6));
+    }
+
+    .subtitle {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      font-weight: 300;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .subtitle span {
+      color: var(--purple-glow);
+    }
+
+    .divider {
+      width: 80px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--purple-glow), transparent);
+      margin: 20px auto 0;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(168,85,247,0.25);
+      border-radius: 24px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 480px;
+      backdrop-filter: blur(20px);
+      box-shadow:
+        0 0 0 1px rgba(168,85,247,0.1),
+        0 30px 80px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+      animation: fadeUp 0.9s ease 0.15s both;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--purple-glow);
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    /* ── INPUT ── */
+    .input-wrap {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .input-label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 10px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(168,85,247,0.3);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      color: var(--white);
+      outline: none;
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+      letter-spacing: 0.5px;
+    }
+
+    .input-field::placeholder { color: rgba(157,143,170,0.5); }
+
+    .input-field:focus {
+      border-color: var(--purple-glow);
+      background: rgba(123,47,255,0.08);
+      box-shadow: 0 0 0 4px rgba(168,85,247,0.15), 0 0 20px rgba(168,85,247,0.1);
+    }
+
+    /* ── BUTTON ── */
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+      background: linear-gradient(135deg, var(--purple-bright), var(--pink));
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(123,47,255,0.4);
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(123,47,255,0.55); }
+    .btn:hover::before { opacity: 1; }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      transform: scale(0);
+      animation: ripple 0.6s linear;
+      pointer-events: none;
+    }
+
+    @keyframes ripple {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* ── RESULT ── */
+    .result {
+      margin-top: 28px;
+      border-radius: 16px;
+      padding: 24px 20px;
+      text-align: center;
+      display: none;
+      animation: resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+
+    @keyframes resultPop {
+      from { opacity: 0; transform: scale(0.85) translateY(10px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .result.success {
+      display: block;
+      background: rgba(0,229,160,0.08);
+      border: 1.5px solid rgba(0,229,160,0.35);
+      box-shadow: 0 0 30px rgba(0,229,160,0.1);
+    }
+
+    .result.error {
+      display: block;
+      background: rgba(255,77,109,0.08);
+      border: 1.5px solid rgba(255,77,109,0.3);
+      box-shadow: 0 0 30px rgba(255,77,109,0.1);
+    }
+
+    .result.loading {
+      display: block;
+      background: rgba(168,85,247,0.06);
+      border: 1.5px solid rgba(168,85,247,0.25);
+    }
+
+    .result-icon {
+      font-size: 2.8rem;
+      margin-bottom: 10px;
+      display: block;
+      line-height: 1;
+    }
+
+    .result-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .result.success .result-title { color: var(--success); }
+    .result.error   .result-title { color: var(--error); }
+    .result.loading .result-title { color: var(--purple-glow); }
+
+    .result-name {
+      font-size: 1rem;
+      color: var(--white);
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .result-msg {
+      font-size: 0.82rem;
+      color: var(--gray);
+      line-height: 1.5;
+    }
+
+    /* loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid rgba(168,85,247,0.2);
+      border-top-color: var(--purple-glow);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── FOOTER ── */
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 0.7rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(157,143,170,0.4);
+      animation: fadeUp 1s ease 0.4s both;
+    }
+
+    .footer strong { color: rgba(168,85,247,0.6); }
+
+    /* ── LIVE DOT ── */
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--success);
+      margin-top: 16px;
+    }
+
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 1.5s ease-in-out infinite;
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    /* ── KEYFRAME UTILS ── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 520px) {
+      .card { padding: 36px 24px; }
+      .logo-text { font-size: 3.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+
+<div class="page">
+  <header class="header">
+    <span class="crown">♛</span>
+    <div class="logo-text">BTS</div>
+    <p class="subtitle">Lima, Perú &nbsp;·&nbsp; <span>Sorteo de Entradas</span></p>
+    <div class="divider"></div>
+  </header>
+
+  <div class="card">
+    <p class="card-title">✦ Verificación de Registro ✦</p>
+
+    <label class="input-label" for="username">Tu nombre de usuario</label>
+    <div class="input-wrap">
+      <input
+        id="username"
+        class="input-field"
+        type="text"
+        placeholder="Escribe tu usuario..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <button class="btn" id="checkBtn" onclick="verificarUsuario()">
+      Verificar registro
+    </button>
+
+    <div id="result" class="result">
+      </div>
+
+    <div style="text-align:center;">
+      <span class="live-badge">
+        <span class="live-dot"></span>
+        Datos en tiempo real
+      </span>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <strong>BTS ARMY Lima</strong> &nbsp;·&nbsp; Sorteo oficial &nbsp;·&nbsp; Contacto: 933201177
+  </footer>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey:            "AIzaSyBv6dj9jf8UaWx3ob_iz_DzdBlqWtcNJu8",
+    authDomain:        "sorteo-56316.firebaseapp.com",
+    databaseURL:       "https://sorteo-56316-default-rtdb.firebaseio.com",
+    projectId:         "sorteo-56316",
+    storageBucket:     "sorteo-56316.firebasestorage.app",
+    messagingSenderId: "607480573121",
+    appId:             "1:607480573121:web:7d091e0d9a59847ddd3840"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // ═══════════════════════════════════════════════
+  // 📂 RUTA en Firebase donde están los usuarios
+  // ═══════════════════════════════════════════════
+  const FIREBASE_PATH = "usuarios";
+</script>
+<script>
+  /* ─── STARS ─── */
+  (function () {
+    const canvas = document.getElementById('stars-canvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function init() {
+      stars = Array.from({ length: 140 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.2 + 0.2,
+        a: Math.random(),
+        speed: Math.random() * 0.005 + 0.002
+      }));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      stars.forEach(s => {
+        s.a += s.speed;
+        const alpha = (Math.sin(s.a) * 0.5 + 0.5) * 0.7 + 0.1;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,180,255,${alpha})`;
+        ctx.fill();
+      });
+      requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', () => { resize(); init(); });
+    resize(); init(); draw();
+  })();
+
+  /* ─── RIPPLE BUTTON ─── */
+  document.getElementById('checkBtn').addEventListener('click', function (e) {
+    const btn    = this;
+    const rect   = btn.getBoundingClientRect();
+    const size   = Math.max(rect.width, rect.height);
+    const x      = e.clientX - rect.left - size / 2;
+    const y      = e.clientY - rect.top  - size / 2;
+    const ripple = document.createElement('span');
+    ripple.className = 'btn-ripple';
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 700);
+  });
+
+  /* ─── ENTER KEY ─── */
+  document.getElementById('username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') verificarUsuario();
+  });
+
+  /* ─── VERIFICAR USUARIO ─── */
+  async function verificarUsuario() {
+    const input = document.getElementById('username');
+    const result = document.getElementById('result');
+    const btn    = document.getElementById('checkBtn');
+
+    const username = input.value.trim();
+
+    if (!username) {
+      shakeInput(input);
+      return;
+    }
+
+    // 🔥 EL TRUCO: Creamos la "llave segura" reemplazando los caracteres prohibidos
+    // exactamente igual que lo hicimos en el script de Python.
+    const keySegura = username
+      .replace(/\./g, "-")
+      .replace(/#/g, "-")
+      .replace(/\$/g, "-")
+      .replace(/\[/g, "-")
+      .replace(/\]/g, "-");
+
+    // Estado: loading
+    btn.disabled = true;
+    result.className = 'result loading';
+    result.innerHTML = `
+      <div class="spinner"></div>
+      <div class="result-title">Buscando...</div>
+      <div class="result-msg">Consultando la lista del sorteo</div>
+    `;
+
+    try {
+      // GET de solo lectura en Firebase buscando la KEY SEGURA
+      const snapshot = await db.ref(`${FIREBASE_PATH}/${keySegura}`).get();
+
+      if (snapshot.exists()) {
+        // ✅ REGISTRADO
+        const data = snapshot.val();
+        
+        // Recuperamos el nombre original de TikTok que guardamos dentro del objeto,
+        // o si no existe, mostramos el que escribió el usuario.
+        const nombreReal = data.usuario_tiktok ? data.usuario_tiktok : username;
+
+        result.className = 'result success';
+        result.innerHTML = `
+          <span class="result-icon">🎉</span>
+          <div class="result-title">¡Estás registrado!</div>
+          <div class="result-name">@${sanitize(nombreReal)}</div>
+          <div class="result-msg">Tu usuario está en la lista del sorteo.<br>¡Buena suerte, ARMY! 💜</div>
+        `;
+      } else {
+        // ❌ NO REGISTRADO
+        result.className = 'result error';
+        result.innerHTML = `
+          <span class="result-icon">😔</span>
+          <div class="result-title">No encontrado</div>
+          <div class="result-name">@${sanitize(username)}</div>
+          <div class="result-msg">Este usuario no está en la lista.<br>Verifica que escribiste tu usuario correctamente.</div>
+        `;
+      }
+    } catch (err) {
+      result.className = 'result error';
+      result.innerHTML = `
+        <span class="result-icon">⚠️</span>
+        <div class="result-title">Error de conexión</div>
+        <div class="result-msg">No se pudo conectar con la base de datos.<br><small style="opacity:0.6">${sanitize(err.message)}</small></div>
+      `;
+      console.error('Firebase error:', err);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function sanitize(str) {
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  function shakeInput(el) {
+    el.style.animation = 'none';
+    el.offsetHeight; // reflow
+    el.style.animation = 'shake 0.4s ease';
+    el.focus();
+  }
+
+  const shakeStyle = document.createElement('style');
+  shakeStyle.textContent = `
+    @keyframes shake {
+      0%,100%{ transform:translateX(0) }
+      20%    { transform:translateX(-8px) }
+      40%    { transform:translateX(8px) }
+      60%    { transform:translateX(-6px) }
+      80%    { transform:translateX(6px) }
+    }
+  `;
+  document.head.appendChild(shakeStyle);
+</script>
+</body>
+</html>
