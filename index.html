@@ -560,10 +560,11 @@
   ];
 
   // Variables Globales
-  let todosLosUsuarios = ["Cargando..."]; // Lista local para la ruleta
+  let todosLosUsuarios = ["Cargando..."]; 
   let sorteoActivo = null;
   let timerInterval = null;
   let ruletaGirando = false;
+  let slowSpinInterval = null; // <-- AGREGA ESTA LÍNEA
 
   // =========================================================
   // 3. INICIALIZACIÓN
@@ -683,22 +684,46 @@
     const track = document.getElementById('roulette-track');
     track.innerHTML = '';
     
-    // Crear una lista larga mezclada para el scroll infinito visual
-    let mezcla = [...todosLosUsuarios].sort(() => 0.5 - Math.random()).slice(0, 30);
-    if(mezcla.length < 10) mezcla = [...mezcla, ...mezcla, ...mezcla]; // Rellenar si hay pocos
+    // 🔴 APAGAMOS el CSS temporalmente para que el JS pueda moverlo fluido
+    track.style.transition = 'none'; 
+    track.classList.remove('scroll-slow');
 
-    // Duplicar para efecto infinito suave
-    const items = [...mezcla, ...mezcla];
+    // Llenamos la pista con 6 nombres iniciales al azar
+    for(let i = 0; i < 6; i++) {
+      agregarNombreAleatorio(track);
+    }
+
+    let posicionY = 0;
+    cancelAnimationFrame(slowSpinInterval); // Usamos animationFrame para máxima fluidez
     
-    items.forEach(n => {
-      const div = document.createElement('div');
-      div.className = 'roulette-item';
-      div.innerText = `@${n}`;
-      track.appendChild(div);
-    });
+    function animarScroll() {
+      posicionY -= 2; // Velocidad: 1 pixel por fotograma (muy fluido)
+      track.style.transform = `translateY(${posicionY}px)`;
 
-    track.classList.add('scroll-slow');
-    track.style.transform = ''; // Limpiar cualquier transform en línea
+      // Cuando el primer nombre (que mide 40px de alto) sale de la vista hacia arriba...
+      if (posicionY <= -40) {
+        track.removeChild(track.firstChild); // Lo borramos
+        agregarNombreAleatorio(track);       // Metemos uno nuevo al azar por abajo
+        posicionY += 40;                     // Corregimos la posición invisiblemente
+        track.style.transform = `translateY(${posicionY}px)`;
+      }
+      
+      // Repetir infinitamente
+      slowSpinInterval = requestAnimationFrame(animarScroll);
+    }
+    
+    slowSpinInterval = requestAnimationFrame(animarScroll);
+  }
+
+  function agregarNombreAleatorio(track) {
+    // Si aún no carga la lista, ponemos "Cargando..."
+    const lista = todosLosUsuarios.length > 0 ? todosLosUsuarios : ["Cargando..."];
+    const randomName = lista[Math.floor(Math.random() * lista.length)];
+    
+    const div = document.createElement('div');
+    div.className = 'roulette-item';
+    div.innerText = `@${randomName}`;
+    track.appendChild(div);
   }
 
   async function ejecutarSorteo(sorteo) {
@@ -751,15 +776,18 @@
   }
 
   function animarRuletaHastaGanador(nombreGanador, sorteo) {
+    // 🔴 DETENEMOS la animación suave
+    cancelAnimationFrame(slowSpinInterval); 
+
     const track = document.getElementById('roulette-track');
-    track.classList.remove('scroll-slow'); // Detener animación lenta CSS
-    track.innerHTML = ''; // Limpiar
+    track.innerHTML = ''; 
     
-    // Altura de cada item en CSS es 40px
+    // 🟢 ENCENDEMOS la transición CSS de 5 segundos para el giro rápido
+    track.style.transition = 'transform 3s cubic-bezier(0.15, 0.9, 0.25, 1)';
+    
     const itemHeight = 40;
-    
-    // Crear pista de "Giro Rápido" (50 nombres al azar)
     const spinCount = 50; 
+    
     for(let i=0; i<spinCount; i++) {
       const randomName = todosLosUsuarios[Math.floor(Math.random() * todosLosUsuarios.length)];
       const div = document.createElement('div');
@@ -774,7 +802,7 @@
     winnerDiv.innerText = `@${nombreGanador}`;
     track.appendChild(winnerDiv);
 
-    // Agregar relleno final para que el scroll no quede en blanco
+    // Agregar relleno final
     for(let i=0; i<3; i++) {
       const div = document.createElement('div');
       div.className = 'roulette-item';
@@ -782,30 +810,22 @@
       track.appendChild(div);
     }
 
-    // Calcular cuánto debe desplazarse hacia arriba para centrar al ganador.
-    // El contenedor tiene 120px de alto. El centro está a 60px.
-    // Queremos que el item `spinCount` (índice 50, que es el ganador) quede centrado.
-    // Posición Y del ganador = spinCount * 40px
-    // Para centrarlo: -(PosicionY - (120/2) + (40/2)) = -(PosicionY - 60 + 20) = -(PosicionY - 40)
-    
     const targetY = -(spinCount * itemHeight - 40);
 
-    // Forzar reflow para que la transición funcione
     track.style.transform = 'translateY(0px)';
-    track.offsetHeight; 
+    track.offsetHeight; // Forzar reflow
 
-    // Iniciar el giro (5 segundos)
+    // Iniciar el giro
     track.style.transform = `translateY(${targetY}px)`;
 
     // Al finalizar la animación
     setTimeout(() => {
       ruletaGirando = false;
-      // Recargar datos desde Firebase para actualizar la lista de ganadores y el próximo sorteo
       db.ref(GANADORES_PATH).once('value').then(snap => {
         actualizarInterfazSorteos(snap.exists() ? snap.val() : {});
-        setTimeout(iniciarRuletaLenta, 3000); // Volver al estado lento después de 3 seg
+        setTimeout(iniciarRuletaLenta, 3000); 
       });
-    }, 5500);
+    }, 3500);
   }
 
 
