@@ -508,7 +508,7 @@
     const result = document.getElementById('result');
     const btn    = document.getElementById('checkBtn');
 
-    const username = input.value.trim().toLowerCase();
+    const username = input.value.trim().toLowerCase().replace(/^@/, '');
 
     if (!username) {
       shakeInput(input);
