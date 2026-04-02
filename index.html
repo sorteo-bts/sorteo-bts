@@ -543,7 +543,7 @@
     },
     { 
       id: 'sorteo_2', 
-      titulo: 'Sorteo Sorpresa', 
+      titulo: 'Sorteo - 50 SOLES', 
       fecha: '2026-04-03T18:00:00-05:00' // Hoy a las 6:00 PM (Hora Lima)
     },
     { 
@@ -609,34 +609,46 @@
   }
 
   function actualizarInterfazSorteos(ganadoresDB) {
-    if (ruletaGirando) return; // No actualizar UI si la ruleta está en proceso
+    if (ruletaGirando) return; // No interrumpir si ya estamos animando algo
 
     const ahora = new Date().getTime();
     let proximoSorteo = null;
     let htmlGanadores = '';
 
-    // Buscar cuál es el próximo sorteo y armar la lista de ganadores
     for (const sorteo of sorteosConfig) {
       const tiempoSorteo = new Date(sorteo.fecha).getTime();
       const yaSeSorteo = ganadoresDB[sorteo.id] !== undefined;
 
       if (yaSeSorteo) {
-        // Mostrar en lista de ganadores
-        htmlGanadores += `
-          <div class="winner-item">
-            <strong>${sorteo.titulo}</strong>
-            <span>@${ganadoresDB[sorteo.id]}</span>
-          </div>`;
+        const ganadorOficial = ganadoresDB[sorteo.id];
+        
+        // --- 🌟 NUEVA LÓGICA: VENTANA DE 1 MINUTO Y MEMORIA ---
+        const tiempoGracia = tiempoSorteo + 60000; // 1 minuto (60,000 ms)
+        const yaVioAnimacion = localStorage.getItem('animado_' + sorteo.id);
+
+        if (ahora <= tiempoGracia && !yaVioAnimacion) {
+          // Entró a tiempo y no ha visto la animación: ¡La disparamos!
+          localStorage.setItem('animado_' + sorteo.id, 'true'); // Marcamos que ya lo vio
+          clearInterval(timerInterval); // Detenemos el reloj
+          ruletaGirando = true; 
+          animarRuletaHastaGanador(ganadorOficial, sorteo);
+          return; // Salimos para no dibujar la lista hasta que termine de girar
+        } else {
+          // Ya pasó el minuto de gracia, o refrescó la página y ya la había visto
+          htmlGanadores += `
+            <div class="winner-item">
+              <strong>${sorteo.titulo}</strong>
+              <span>@${ganadorOficial}</span>
+            </div>`;
+        }
       } else if (!proximoSorteo && tiempoSorteo > ahora) {
-        // Encontramos el próximo sorteo pendiente
         proximoSorteo = sorteo;
       } else if (!proximoSorteo && tiempoSorteo <= ahora) {
-        // El tiempo ya pasó, pero no hay ganador en BD. ¡Debería estar sorteándose!
         proximoSorteo = sorteo;
       }
     }
 
-    // Renderizar ganadores
+    // Renderizar ganadores en la caja inferior
     const listaGanadoresDiv = document.getElementById('winners-list');
     if (htmlGanadores === '') {
       listaGanadoresDiv.innerHTML = `<p class="input-label" style="text-align:center; margin-bottom: 15px;">Ganadores Anteriores</p><p style="text-align:center; color: var(--gray); font-size: 0.8rem;">Aún no hay ganadores.</p>`;
@@ -644,14 +656,14 @@
       listaGanadoresDiv.innerHTML = `<p class="input-label" style="text-align:center; margin-bottom: 15px;">Ganadores Anteriores</p>` + htmlGanadores;
     }
 
-    // Configurar temporizador del próximo sorteo
+    // Configurar temporizador del próximo
     if (proximoSorteo) {
       sorteoActivo = proximoSorteo;
       document.querySelector('.raffle-name').innerText = proximoSorteo.titulo;
       iniciarTemporizador(new Date(proximoSorteo.fecha).getTime());
     } else {
-      document.querySelector('.raffle-name').innerText = "¡Todos los mini sorteos finalizados!";
-      document.querySelector('.raffle-countdown').innerText = "Esperando el sorteo principal";
+      document.querySelector('.raffle-name').innerText = "¡Sorteos finalizados!";
+      document.querySelector('.raffle-countdown').innerText = "Esperando el principal";
       clearInterval(timerInterval);
     }
   }
@@ -730,43 +742,36 @@
     if (ruletaGirando) return;
     ruletaGirando = true;
 
-    // Elegir un ganador al azar localmente
-    // 1. Obtener los que ya ganaron algún premio antes
+    // Marcamos inmediatamente en su navegador que ya presenció el evento
+    localStorage.setItem('animado_' + sorteo.id, 'true');
+
+    // 1. Filtrar a los que ya ganaron un sorteo anterior
     const snapshotGanadores = await db.ref(GANADORES_PATH).once('value');
     const ganadoresPrevios = snapshotGanadores.exists() ? Object.values(snapshotGanadores.val()) : [];
-
-    // 2. Crear una lista nueva solo con los que NO han ganado
     const usuariosDisponibles = todosLosUsuarios.filter(usuario => !ganadoresPrevios.includes(usuario));
-
-    // 3. Por si acaso todos ganaron (muy raro, pero evita errores)
+    
+    // Por seguridad, si por alguna locura todos ganaron, usamos la lista completa
     const listaFinal = usuariosDisponibles.length > 0 ? usuariosDisponibles : todosLosUsuarios;
 
-    // 4. Elegir ganador de la lista filtrada
+    // Elegir ganador local de la lista filtrada
     const ganadorLocal = listaFinal[Math.floor(Math.random() * listaFinal.length)];
-    
     let ganadorFinal = ganadorLocal;
 
     // --- TRANSACCIÓN FIREBASE ---
-    // Esto asegura que si 100 personas ven la página a la vez, solo 1 ganador se guarda.
     const refSorteo = db.ref(`${GANADORES_PATH}/${sorteo.id}`);
-    
     try {
       const result = await refSorteo.transaction((estadoActual) => {
         if (estadoActual === null) {
-          // Nadie ha guardado un ganador aún, guardamos el nuestro
-          return ganadorLocal;
+          return ganadorLocal; // Nadie lo ha guardado, guardamos el nuestro
         } else {
-          // Alguien más fue una fracción de segundo más rápido. Abortamos y no sobreescribimos.
-          return; 
+          return; // Alguien nos ganó el milisegundo, abortamos escritura
         }
       });
 
       if (result.committed) {
-        // Nosotros definimos al ganador
-        ganadorFinal = ganadorLocal;
+        ganadorFinal = ganadorLocal; // Fuimos los primeros
       } else {
-        // Alguien más ganó la carrera, usamos su ganador para la animación
-        ganadorFinal = result.snapshot.val();
+        ganadorFinal = result.snapshot.val(); // Alguien más fue primero, usamos SU ganador
       }
     } catch (e) {
       console.error("Error en transacción:", e);
