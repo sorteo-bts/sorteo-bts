@@ -568,7 +568,7 @@
         <br>¡Buena suerte, ARMY! 💜</div>`;
       } else {
         result.className = 'result error';
-        result.innerHTML = `<span class="result-icon">😔</span><div class="result-title">No encontrado</div><div class="result-name">@${sanitize(username)}</div><div class="result-msg">Este usuario no está en la lista.</div>`;
+        result.innerHTML = `<span class="result-icon">😔</span><div class="result-title">No encontrado</div><div class="result-name">@${sanitize(username)}</div><div class="result-msg">Este usuario no está en la lista. <br>Escribenos a 933201177</div>`;
       }
     } catch (err) {
       result.className = 'result error'; result.innerHTML = `<span class="result-icon">⚠️</span><div class="result-title">Error</div><div class="result-msg">Error de conexión.</div>`;
