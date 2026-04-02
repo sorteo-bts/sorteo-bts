@@ -544,16 +544,16 @@
     { 
       id: 'sorteo_2', 
       titulo: 'Sorteo - 50 SOLES', 
-      fecha: '2026-04-03T18:00:00-05:00' // Hoy a las 6:00 PM (Hora Lima)
+      fecha: '2026-04-02T18:00:00-05:00' // Hoy a las 6:00 PM (Hora Lima)
     },
     { 
       id: 'sorteo_3', 
-      titulo: 'Sorteo Principal - ENTRADA DOBLE | ZONA CAMPO', 
+      titulo: 'Sorteo Principal - ENTRADA DOBLE | ZONA CAMPO | 9 DE OCTUBRE', 
       fecha: '2026-04-10T17:00:00-05:00' // 5 de abril a las 8:00 PM (Hora Lima)
     },
     { 
       id: 'sorteo_4', 
-      titulo: 'Sorteo Principal - ENTRADA DOBLE | ZONA CAMPO', 
+      titulo: 'Sorteo Principal - ENTRADA DOBLE | ZONA CAMPO | 10 DE OCTUBRE', 
       fecha: '2026-04-10T18:00:00-05:00' // 9 de abril a las 7:00 PM (Hora Lima)
     }
     // Puedes agregar más separándolos con una coma (,) al final de la llave }
@@ -680,11 +680,20 @@
         document.querySelector('.raffle-countdown').innerText = "¡SORTEANDO AHORA!";
         ejecutarSorteo(sorteoActivo);
       } else {
+        // Nuevos cálculos incluyendo días
+        const dias = Math.floor(distancia / (1000 * 60 * 60 * 24));
         const horas = Math.floor((distancia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutos = Math.floor((distancia % (1000 * 60 * 60)) / (1000 * 60));
         const segundos = Math.floor((distancia % (1000 * 60)) / 1000);
-        document.querySelector('.raffle-countdown').innerText = 
-          `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+
+        // Construir el texto a mostrar
+        let textoReloj = "";
+        if (dias > 0) {
+          textoReloj += `${dias}d `; // Añade "1d " si falta más de 24h
+        }
+        textoReloj += `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
+
+        document.querySelector('.raffle-countdown').innerText = textoReloj;
       }
     }, 1000);
   }
